@@ -9,6 +9,7 @@ library(sweep)
 library(lubridate)
 library(zoo)
 
+
 source("functions/StorePlotFunction.R")
 source("functions/ImputationFunction.R")
 
@@ -58,12 +59,6 @@ StorePlot(600805048)
 ImputeMissingDates(600805048)
 StorePlot(500117825)
 ImputeMissingDates(500117825)
-
-
-
-
-
-
 
 
 
