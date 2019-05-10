@@ -1,34 +1,43 @@
 library(plotly)
 
-OrderGaps <- function(ID) {
+OrderGaps <- function(df, store, prod) {
   
-  store <- super %>% 
-    filter(id == ID)  # filter store
+  store.prod <- df %>% 
+    filter(outlet == store) %>% 
+    filter(item == prod)
   
-  actual <- ggplotly(store %>% 
-                       ggplot(aes(Date, Volume)) + 
+  actual <- ggplotly(store.prod %>% 
+                       ggplot(aes(OrderDate, OrderedQty)) + 
                        geom_line())
   
-  full_calendar <- as.data.frame(seq(as.Date("2017/1/1"), as.Date("2019/3/16"), "days"))
-  full_calendar$Date <- full_calendar$`seq(as.Date("2017/1/1"), as.Date("2019/3/16"), "days")`  # create vector of full dates for 2 years
+  full_calendar <- as.data.frame(seq(as.Date("2017/1/1"), as.Date("2019/3/29"), "days"))
+  full_calendar$OrderDate <- full_calendar$`seq(as.Date("2017/1/1"), as.Date("2019/3/29"), "days")`  # create vector of full dates for 2+ years
   
   full_calendar <- full_calendar %>% 
-    left_join(store, "Date") %>% 
-    select(-c(`seq(as.Date("2017/1/1"), as.Date("2019/3/16"), "days")`))  # filter store
+    select(-c(`seq(as.Date("2017/1/1"), as.Date("2019/3/29"), "days")`))
+  full_calendar <- full_calendar %>% 
+    left_join(store.prod, "OrderDate")
   
-  full_calendar$Volume[is.na(full_calendar$Volume)] <- 0 
-  full_calendar_filled <- full_calendar
-  full_calendar_filled$Volume <- ave(full_calendar$Volume,cumsum(full_calendar$Volume)) 
+  full_calendar$OrderedQtySpread <- full_calendar$OrderedQty
+  full_calendar$OrderedQtyZeroes <- full_calendar$OrderedQty
   
-  filled <- ggplotly(full_calendar_filled %>%
-                       ggplot(aes(Date, Volume)) +
+  full_calendar$OrderedQtySpread[is.na(full_calendar$OrderedQtySpread)] <- 0 
+  full_calendar$OrderedQtySpread <- ave(full_calendar$OrderedQtySpread,cumsum(full_calendar$OrderedQtySpread)) 
+  
+  full_calendar$OrderedQtyZeroes[is.na(full_calendar$OrderedQtyZeroes)] <- 0
+  
+  full_calendar <- full_calendar %>% 
+    select(-c(DeliveryDate, outlet, item))
+  
+  filled <- ggplotly(full_calendar %>%
+                       ggplot(aes(OrderDate, OrderedQtySpread)) +
                        geom_line())
   
-  a <- subplot(actual, filled, nrows = 2)  
+  withzeroes <- ggplotly(full_calendar %>%
+                           ggplot(aes(OrderDate, OrderedQtyZeroes)) +
+                           geom_line())
   
-  b <- cbind(full_calendar, full_calendar_filled$Volume)
-  b <- b %>% 
-    select(-c(Customer, id))
+  a <- subplot(actual, withzeroes, filled, nrows = 3)  
   
-  return(list(plot.compare = a, values.compare = b))
-  }
+  return(list(plot.compare = a, values.compare = full_calendar))
+}
