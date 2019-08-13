@@ -1,0 +1,104 @@
+---
+title: "Pricing Investigation"
+author: "Jason Richardson"
+date: "8/13/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(data.table)
+library(tidyverse)
+library(knitr)
+
+order.info <- fread("data/bogdandata/SO_RacetracAndOthers_2017_20190729_dates.csv")
+
+order.info <- order.info %>% 
+  filter(`Primary GroupDesc` == "7-ELEVEN" |
+         `Primary GroupDesc` == "RACETRAC PETROLEUM" |
+         `Primary GroupDesc` == "SPEEDWAY") %>% 
+  mutate(max.qty = pmax(`Ordered Qty`, `Delivered Qty`)) %>% 
+  rename(MaterialNo = `Material No`,
+         sold.to = `Sold To`) %>% 
+  mutate(OrderDate = as.Date(as.character(OrderDate), "%Y%m%d"))
+
+products.price <- fread("data/bogdandata/Products_Price.csv")
+
+products.price <- products.price %>% 
+  filter(KeyAccount == "7-ELEVEN" |
+         KeyAccount == "RACETRAC PETROLEUM" |
+         KeyAccount == "SPEEDWAY")
+
+products.price$Price_RC <- round(products.price$Price_RC, 2)
+```
+
+## Is there a variation in unit price from customer to customer?
+
+Short answer: yes. 
+
+Using the products price csv, pulling 20 random products, we see different price across Key Accounts when dividing volume by DNR.
+
+```{r unit.price, echo = FALSE}
+# get random sample of 20 products
+
+samp.prod <- products.price %>% 
+  select(MaterialNo) %>% 
+  unique() %>% 
+  sample_n(15)
+
+print.data.frame(products.price %>% 
+  semi_join(samp.prod, "MaterialNo") %>% 
+  select(-c(Volume, DNR)) %>%
+  select(Product, KeyAccount, Price_RC) %>% 
+  mutate(KeyAccount = recode(KeyAccount, "RACETRAC PETROLEUM" = "RACETRAC")) %>% 
+  arrange(Product))
+
+```
+
+## Is there a variation in unit price over time?
+
+Maybe. There are relatively flat lines for each outlet but what are the spikes? Are those net values accidentally making their way in?
+
+```{r netvalue.time, echo=FALSE}
+one.samp.prod <- products.price %>% 
+  select(MaterialNo) %>% 
+  unique() %>% 
+  # sample_n(1)
+  filter(MaterialNo == 115583) #115583 is good if don't want to use random, 12 pack Coke
+
+ten.samp.stores <- order.info %>% 
+  select(sold.to) %>% 
+  unique() %>% 
+  sample_n(10)
+
+order.random <- order.info %>% 
+  semi_join(one.samp.prod, "MaterialNo") %>% 
+  semi_join(ten.samp.stores, "sold.to")
+
+order.random %>% 
+  ggplot(aes(y = NetPrice, x = OrderDate, color = as.factor(sold.to))) +
+  geom_line(position=position_jitter(h = 0.2, w = 0.2)) +
+  labs(title = "Price over Time", 
+       subtitle = "1 random product, 10 random stores",
+       caption = "Each line represents and outlet through time") +
+  facet_wrap(~`Primary GroupDesc`) +
+  theme(legend.position = "none")
+
+```
+
+## Is price a predictor for Ordered Quantity?
+
+This part will likely be wrong until I get those outliers above figured out, but wanted to get the code built anyway. 
+
+```{r netvalue.modelling, echo=FALSE}
+
+order.info %>%
+  filter(NetPrice > 0) %>% 
+  ggplot(aes(x = NetPrice, y = max.qty, color = as.factor(`Primary GroupDesc`))) +
+  geom_jitter() +
+  ggtitle("Price over Time", "1 random product, 10 random stores")
+
+hist((order.info$max.qty), breaks = 35)
+
+```
